@@ -1,0 +1,9 @@
+using System.Data;
+using Microsoft.EntityFrameworkCore;
+using WebChat.Api.Infrastructure.Persistence;
+using WebChat.Api.Shared.Entities;
+using WebChat.Api.Features.Files;
+
+namespace WebChat.Api.Features.Groups;
+
+public sealed record UpdateGroupRequest(string Name, string? Description, Guid? AvatarFileId);

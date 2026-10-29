@@ -1,0 +1,28 @@
+# Vercel
+.vercel/
+
+# Environment files in nested folders
+**/.env
+**/.env.*
+!**/.env.example
+
+# Local configuration and secrets
+**/appsettings.Local.json
+**/appsettings.*.Local.json
+**/appsettings.Production.json
+**/secrets.json
+
+# Development uploads
+**/private-uploads/
+**/uploads/
+
+# Frontend
+**/coverage/
+**/.vite/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Project documentation
+/docs/

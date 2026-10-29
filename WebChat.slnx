@@ -1,0 +1,6 @@
+<Solution>
+  <Folder Name="/backend/">
+    <Project Path="backend/WebChat.Api/WebChat.Api.csproj" />
+    <Project Path="backend/WebChat.Tests/WebChat.Tests.csproj" />
+  </Folder>
+</Solution>
