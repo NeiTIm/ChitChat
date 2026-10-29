@@ -167,3 +167,4 @@ F:\Learn\ChitChat\ChitChat\backend\WebChat.Api\obj\Debug\net10.0\refint\WebChat.
 F:\Learn\ChitChat\ChitChat\backend\WebChat.Api\obj\Debug\net10.0\WebChat.Api.pdb
 F:\Learn\ChitChat\ChitChat\backend\WebChat.Api\obj\Debug\net10.0\WebChat.Api.genruntimeconfig.cache
 F:\Learn\ChitChat\ChitChat\backend\WebChat.Api\obj\Debug\net10.0\ref\WebChat.Api.dll
+F:\Learn\ChitChat\ChitChat\backend\WebChat.Api\obj\Debug\net10.0\WebChat.Api.sourcelink.json

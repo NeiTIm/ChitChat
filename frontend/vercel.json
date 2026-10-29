@@ -1,0 +1,16 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://df93-2405-4803-cae4-46d0-a959-1dde-3473-a5f3.ngrok-free.app/api/:path*"
+    },
+    {
+      "source": "/hubs/:path*",
+      "destination": "https://df93-2405-4803-cae4-46d0-a959-1dde-3473-a5f3.ngrok-free.app/hubs/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}

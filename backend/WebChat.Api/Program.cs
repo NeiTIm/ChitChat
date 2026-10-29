@@ -107,10 +107,21 @@ builder.Services.AddRateLimiter(options =>
         context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
         _ => new FixedWindowRateLimiterOptions { PermitLimit = 30, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
 });
-builder.Services.AddCors(options => options.AddPolicy("LocalFrontend", policy => policy
-    .WithOrigins("http://localhost:5173", "http://127.0.0.1:5173")
-    .AllowAnyHeader()
-    .AllowAnyMethod()));
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("LocalFrontend", policy =>
+    {
+        policy
+            .WithOrigins(
+                "http://localhost:5174",
+                "http://127.0.0.1:5174",
+                "https://chit-chat-khaki-pi.vercel.app"
+            )
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials();
+    });
+});
 
 var app = builder.Build();
 app.UseExceptionHandler();
