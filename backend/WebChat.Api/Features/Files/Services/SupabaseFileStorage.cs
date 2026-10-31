@@ -173,14 +173,16 @@ public sealed class SupabaseFileStorage : IFileStorage
 
         if (!response.IsSuccessStatusCode)
         {
+            var errorBody = await response.Content
+                .ReadAsStringAsync(ct);
+
             logger.LogError(
-                "Supabase upload failed. HTTP {StatusCode}.",
-                (int)response.StatusCode);
+                "Supabase download failed. HTTP {Status}. Response: {Error}",
+                (int)response.StatusCode,
+                errorBody);
 
             throw new HttpRequestException(
-                "Supabase Storage upload failed.",
-                null,
-                response.StatusCode);
+                "Supabase Storage download failed.");
         }
     }
 

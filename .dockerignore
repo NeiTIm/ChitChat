@@ -1,0 +1,34 @@
+# Git
+.git
+.gitignore
+
+# Frontend
+frontend/node_modules
+frontend/dist
+
+# Build outputs
+**/bin
+**/obj
+
+# IDE
+.vs
+.vscode
+.idea
+
+# Local environment and credentials
+**/.env
+**/.env.*
+**/secrets.json
+
+# Local development configuration
+**/appsettings.Development.json
+
+# Local uploaded files
+**/private-uploads
+**/private-uploads/**
+
+# Logs
+**/*.log
+
+# Documentation
+*.md

@@ -25,7 +25,7 @@ import { Button } from '../../../components/ui/button'
 import { Skeleton } from '../../../components/ui/skeleton'
 import { chatApi } from '../api/chatApi'
 import { restoreAccessToken } from '../../auth/utils/authSession'
-
+import { hubUrl } from '../../../shared/config/backendUrl'
 function formatTime(value) {
   if (!value) return ''
 
@@ -303,7 +303,7 @@ export default function MessageRequestsPage() {
     if (!token) return
 
     const hub = new HubConnectionBuilder()
-      .withUrl('/hubs/chat', {
+      .withUrl(hubUrl, {
         accessTokenFactory: () => token,
       })
       .withAutomaticReconnect()

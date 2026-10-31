@@ -39,7 +39,7 @@ import ForwardPicker from '../components/ForwardPicker'
 import MessageSearch from '../components/MessageSearch'
 import FileComposer from '../components/FileComposer'
 import ConversationMuteButton from '../../notifications/components/ConversationMuteButton'
-
+import { hubUrl } from '../../../shared/config/backendUrl'
 // ======================================================
 // SHARED UI
 // ======================================================
@@ -432,7 +432,7 @@ export default function ChatPage() {
     let disposed = false
 
     const hub = new HubConnectionBuilder()
-      .withUrl('/hubs/chat', {
+      .withUrl(hubUrl, {
         accessTokenFactory: () => access,
       })
       .withAutomaticReconnect()

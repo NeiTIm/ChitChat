@@ -25,7 +25,7 @@ import { restoreAccessToken } from '../../auth/utils/authSession'
 import { Badge } from '../../../components/ui/badge'
 import { Button } from '../../../components/ui/button'
 import { Skeleton } from '../../../components/ui/skeleton'
-
+import { hubUrl } from '../../../shared/config/backendUrl'
 // ======================================================
 // HELPERS
 // ======================================================
@@ -352,7 +352,7 @@ export default function NotificationsPage() {
     let disposed = false
 
     const hub = new HubConnectionBuilder()
-      .withUrl('/hubs/chat', {
+      .withUrl(hubUrl, {
         accessTokenFactory: () => token,
       })
       .withAutomaticReconnect()

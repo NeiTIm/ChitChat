@@ -41,6 +41,7 @@ import {
   getAccessToken,
   restoreAccessToken,
   setAccessToken,
+  getCsrfToken,
 } from '../utils/authSession'
 
 // ======================================================
@@ -310,7 +311,7 @@ export default function AccountPage() {
       await authApi.postAuthLogout(null, {
         headers: {
           ...authHeader(),
-          'X-CSRF-Token': csrfToken(),
+          'X-CSRF-Token': await getCsrfToken(),
         },
       })
     } catch {

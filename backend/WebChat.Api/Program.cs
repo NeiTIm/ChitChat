@@ -480,16 +480,41 @@ builder.Services.AddRateLimiter(options =>
 // CORS
 // =====================================================
 
+// =====================================================
+// CORS — DEVELOPMENT / PRODUCTION
+// =====================================================
+
+var allowedOrigins = builder.Configuration
+    .GetSection("Cors:AllowedOrigins")
+    .Get<string[]>()
+    ?? throw new InvalidOperationException(
+        "Cors:AllowedOrigins is not configured.");
+
+if (allowedOrigins.Length == 0 ||
+    allowedOrigins.Any(origin =>
+        !Uri.TryCreate(
+            origin,
+            UriKind.Absolute,
+            out var uri)
+        || (uri.Scheme != Uri.UriSchemeHttps &&
+            uri.Scheme != Uri.UriSchemeHttp)
+        || uri.AbsolutePath != "/"
+        || !string.IsNullOrEmpty(uri.Query)
+        || !string.IsNullOrEmpty(uri.Fragment)
+        || origin.EndsWith('/')
+        || (builder.Environment.IsProduction() &&
+            uri.Scheme != Uri.UriSchemeHttps)))
+{
+    throw new InvalidOperationException(
+        "Cors:AllowedOrigins contains an invalid origin.");
+}
+
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("LocalFrontend", policy =>
+    options.AddPolicy("Frontend", policy =>
     {
         policy
-            .WithOrigins(
-                "http://localhost:5174",
-                "http://127.0.0.1:5174",
-                "https://chit-chat-khaki-pi.vercel.app"
-            )
+            .WithOrigins(allowedOrigins)
             .AllowAnyHeader()
             .AllowAnyMethod()
             .AllowCredentials();
@@ -509,7 +534,7 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
-app.UseCors("LocalFrontend");
+app.UseCors("Frontend");
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();

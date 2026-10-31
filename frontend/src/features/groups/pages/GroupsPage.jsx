@@ -44,7 +44,7 @@ import MessageSearch from '../../chat/components/MessageSearch'
 import FileComposer from '../../chat/components/FileComposer'
 import GroupControls, { LinkJoinForm } from '../components/GroupControls'
 import ConversationMuteButton from '../../notifications/components/ConversationMuteButton'
-
+import { hubUrl } from '../../../shared/config/backendUrl'
 function EmptyState({ icon: Icon, title, description }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-6 py-12 text-center">
@@ -287,7 +287,7 @@ export default function GroupsPage() {
     if (!token) return
 
     const hub = new HubConnectionBuilder()
-      .withUrl('/hubs/chat', { accessTokenFactory: () => token })
+      .withUrl(hubUrl, { accessTokenFactory: () => token })
       .withAutomaticReconnect()
       .configureLogging(LogLevel.Warning)
       .build()
