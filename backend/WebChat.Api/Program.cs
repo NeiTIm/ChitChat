@@ -29,12 +29,6 @@ builder.Services.AddOpenApi();
 // =====================================================
 // DATABASE PROVIDER
 // =====================================================
-// SqlServer: môi trường local cũ.
-// PostgreSQL: Neon PostgreSQL.
-//
-// Không tự động migrate database khi API khởi động.
-// PostgreSQL migrations được quản lý bằng project riêng.
-// =====================================================
 
 var databaseProvider =
     builder.Configuration["Database:Provider"] ?? "SqlServer";
@@ -58,22 +52,22 @@ builder.Services.AddDbContext<AppDbContext>(options =>
         StringComparison.OrdinalIgnoreCase))
     {
         var connectionString =
-            builder.Configuration.GetConnectionString("WebChatPostgres");
+            builder.Configuration.GetConnectionString(
+                "WebChatPostgres"
+            );
 
-        // Hỗ trợ biến môi trường đang sử dụng
-        // cho PostgreSQL migrations.
         if (string.IsNullOrWhiteSpace(connectionString))
         {
             connectionString =
-                builder.Configuration["CHITCHAT_POSTGRES_CONNECTION"];
+                builder.Configuration[
+                    "CHITCHAT_POSTGRES_CONNECTION"
+                ];
         }
 
         if (string.IsNullOrWhiteSpace(connectionString))
         {
             throw new InvalidOperationException(
-                "PostgreSQL connection string is not configured. " +
-                "Set ConnectionStrings__WebChatPostgres or " +
-                "CHITCHAT_POSTGRES_CONNECTION."
+                "PostgreSQL connection string is not configured."
             );
         }
 
@@ -112,14 +106,19 @@ builder.Services.AddScoped<IFriendService>(
 );
 
 builder.Services.AddScoped<PrivateChatService>();
-
 builder.Services.AddScoped<MessageRequestService>();
 
-builder.Services.AddScoped<WebChat.Api.Features.Groups.GroupService>();
+builder.Services.AddScoped<
+    WebChat.Api.Features.Groups.GroupService
+>();
 
-builder.Services.AddScoped<WebChat.Api.Features.Groups.AdvancedGroupService>();
+builder.Services.AddScoped<
+    WebChat.Api.Features.Groups.AdvancedGroupService
+>();
 
-builder.Services.AddScoped<WebChat.Api.Features.Groups.GroupInviteLinkService>();
+builder.Services.AddScoped<
+    WebChat.Api.Features.Groups.GroupInviteLinkService
+>();
 
 builder.Services.AddScoped<
     WebChat.Api.Features.Messages.IMessageRepository,
@@ -146,12 +145,38 @@ builder.Services.AddScoped<
     WebChat.Api.Features.Presence.PresenceService
 >();
 
-builder.Services.AddSingleton<
-    WebChat.Api.Features.Files.IFileStorage,
-    WebChat.Api.Features.Files.LocalFileStorage
->();
+var fileStorageProvider =
+    builder.Configuration["FileStorage:Provider"] ?? "Local";
 
-builder.Services.AddScoped<WebChat.Api.Features.Files.FileService>();
+if (fileStorageProvider.Equals(
+        "Supabase",
+        StringComparison.OrdinalIgnoreCase))
+{
+    builder.Services.AddHttpClient<
+        WebChat.Api.Features.Files.SupabaseFileStorage>();
+
+    builder.Services.AddScoped<
+        WebChat.Api.Features.Files.IFileStorage>(
+        sp => sp.GetRequiredService<
+            WebChat.Api.Features.Files.SupabaseFileStorage>());
+}
+else if (fileStorageProvider.Equals(
+             "Local",
+             StringComparison.OrdinalIgnoreCase))
+{
+    builder.Services.AddSingleton<
+        WebChat.Api.Features.Files.IFileStorage,
+        WebChat.Api.Features.Files.LocalFileStorage>();
+}
+else
+{
+    throw new InvalidOperationException(
+        $"Unsupported file storage provider: {fileStorageProvider}");
+}
+
+builder.Services.AddScoped<
+    WebChat.Api.Features.Files.FileService
+>();
 
 builder.Services.AddScoped<
     WebChat.Api.Features.Files.MessageAttachmentService
@@ -179,7 +204,66 @@ builder.Services.AddScoped<
 
 builder.Services.AddSignalR();
 
-builder.Services.AddScoped<IAuthMailSender, DevMailSink>();
+// =====================================================
+// EMAIL PROVIDER
+// =====================================================
+// Development mặc định sử dụng DevMail.
+// Production bắt buộc cấu hình Resend.
+// Có thể test Resend ngay tại localhost bằng Mail__Provider.
+// =====================================================
+
+var mailProvider = builder.Configuration["Mail:Provider"];
+
+if (string.IsNullOrWhiteSpace(mailProvider))
+{
+    mailProvider = builder.Environment.IsDevelopment()
+        ? "Dev"
+        : "Resend";
+}
+
+if (mailProvider.Equals(
+    "Dev",
+    StringComparison.OrdinalIgnoreCase))
+{
+    if (!builder.Environment.IsDevelopment())
+    {
+        throw new InvalidOperationException(
+            "DevMailSink is only available in Development."
+        );
+    }
+
+    builder.Services.AddScoped<IAuthMailSender, DevMailSink>();
+}
+else if (mailProvider.Equals(
+    "Resend",
+    StringComparison.OrdinalIgnoreCase))
+{
+    if (string.IsNullOrWhiteSpace(
+            builder.Configuration["Resend:ApiKey"]) ||
+        string.IsNullOrWhiteSpace(
+            builder.Configuration["Resend:From"]) ||
+        string.IsNullOrWhiteSpace(
+            builder.Configuration["Resend:FrontendBaseUrl"]))
+    {
+        throw new InvalidOperationException(
+            "Resend requires ApiKey, From and FrontendBaseUrl."
+        );
+    }
+
+    builder.Services.AddHttpClient<
+        IAuthMailSender,
+        ResendMailSender
+    >(client =>
+    {
+        client.Timeout = TimeSpan.FromSeconds(20);
+    });
+}
+else
+{
+    throw new InvalidOperationException(
+        $"Unsupported mail provider: {mailProvider}"
+    );
+}
 
 // =====================================================
 // JWT AUTHENTICATION
@@ -195,37 +279,42 @@ builder.Services
             Encoding.UTF8.GetByteCount(signingKey) < 32)
         {
             throw new InvalidOperationException(
-                "JWT signing key must be configured in local secret storage."
+                "JWT signing key must be configured " +
+                "in local secret storage."
             );
         }
 
-        options.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuer = true,
-            ValidIssuer = "WebChat.Api",
+        options.TokenValidationParameters =
+            new TokenValidationParameters
+            {
+                ValidateIssuer = true,
+                ValidIssuer = "WebChat.Api",
 
-            ValidateAudience = true,
-            ValidAudience = "WebChat.Frontend",
+                ValidateAudience = true,
+                ValidAudience = "WebChat.Frontend",
 
-            ValidateLifetime = true,
-            ClockSkew = TimeSpan.FromSeconds(30),
+                ValidateLifetime = true,
+                ClockSkew = TimeSpan.FromSeconds(30),
 
-            ValidateIssuerSigningKey = true,
-
-            IssuerSigningKey = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(signingKey)
-            )
-        };
+                ValidateIssuerSigningKey = true,
+                IssuerSigningKey = new SymmetricSecurityKey(
+                    Encoding.UTF8.GetBytes(signingKey)
+                )
+            };
 
         options.Events = new JwtBearerEvents
         {
             OnMessageReceived = context =>
             {
-                if (context.Request.Path.StartsWithSegments("/hubs/chat") &&
+                if (
+                    context.Request.Path.StartsWithSegments(
+                        "/hubs/chat"
+                    ) &&
                     context.Request.Query.TryGetValue(
                         "access_token",
                         out var token
-                    ))
+                    )
+                )
                 {
                     context.Token = token;
                 }
@@ -243,38 +332,53 @@ builder.Services
                         ClaimTypes.NameIdentifier
                     );
 
-                if (context.Principal?.FindFirstValue("scope") == "appeal")
+                if (
+                    context.Principal?.FindFirstValue("scope")
+                    == "appeal"
+                )
                 {
-                    if (!Guid.TryParse(userIdText, out var appealUserId) ||
+                    if (
+                        !Guid.TryParse(
+                            userIdText,
+                            out var appealUserId
+                        ) ||
                         !context.Request.Path.StartsWithSegments(
                             "/api/appeals"
-                        ))
+                        )
+                    )
                     {
-                        context.Fail("Appeal token is restricted");
+                        context.Fail(
+                            "Appeal token is restricted"
+                        );
                         return;
                     }
 
-                    var appealDb = context.HttpContext.RequestServices
-                        .GetRequiredService<AppDbContext>();
+                    var appealDb =
+                        context.HttpContext.RequestServices
+                            .GetRequiredService<AppDbContext>();
 
-                    var appealUser = await appealDb.Users.FindAsync(
-                        appealUserId
-                    );
-
-                    var appealSuspended =
-                        await appealDb.AccountSuspensions.AnyAsync(s =>
-                            s.UserId == appealUserId &&
-                            s.Status == "Active" &&
-                            s.RevokedAt == null &&
-                            (
-                                s.ExpiresAt == null ||
-                                s.ExpiresAt > DateTime.UtcNow
-                            )
+                    var appealUser =
+                        await appealDb.Users.FindAsync(
+                            appealUserId
                         );
 
-                    if (appealUser?.EmailVerifiedAt is null ||
+                    var appealSuspended =
+                        await appealDb.AccountSuspensions.AnyAsync(
+                            s =>
+                                s.UserId == appealUserId &&
+                                s.Status == "Active" &&
+                                s.RevokedAt == null &&
+                                (
+                                    s.ExpiresAt == null ||
+                                    s.ExpiresAt > DateTime.UtcNow
+                                )
+                        );
+
+                    if (
+                        appealUser?.EmailVerifiedAt is null ||
                         appealUser.DeactivatedAt is not null ||
-                        !appealSuspended)
+                        !appealSuspended
+                    )
                     {
                         context.Fail(
                             "Appeal identity is no longer eligible"
@@ -287,8 +391,16 @@ builder.Services
                 var sessionIdText =
                     context.Principal?.FindFirstValue("sid");
 
-                if (!Guid.TryParse(userIdText, out var userId) ||
-                    !Guid.TryParse(sessionIdText, out var sessionId))
+                if (
+                    !Guid.TryParse(
+                        userIdText,
+                        out var userId
+                    ) ||
+                    !Guid.TryParse(
+                        sessionIdText,
+                        out var sessionId
+                    )
+                )
                 {
                     context.Fail("Invalid session");
                     return;
@@ -299,29 +411,35 @@ builder.Services
 
                 var now = DateTime.UtcNow;
 
-                var active = await db.UserSessions.AnyAsync(s =>
-                    s.Id == sessionId &&
-                    s.UserId == userId &&
-                    s.RevokedAt == null
-                );
-
-                var user = await db.Users.FindAsync(userId);
-
-                var suspended =
-                    await db.AccountSuspensions.AnyAsync(s =>
-                        s.UserId == userId &&
-                        s.Status == "Active" &&
-                        s.RevokedAt == null &&
-                        (
-                            s.ExpiresAt == null ||
-                            s.ExpiresAt > now
-                        )
+                var active =
+                    await db.UserSessions.AnyAsync(
+                        s =>
+                            s.Id == sessionId &&
+                            s.UserId == userId &&
+                            s.RevokedAt == null
                     );
 
-                if (!active ||
+                var user =
+                    await db.Users.FindAsync(userId);
+
+                var suspended =
+                    await db.AccountSuspensions.AnyAsync(
+                        s =>
+                            s.UserId == userId &&
+                            s.Status == "Active" &&
+                            s.RevokedAt == null &&
+                            (
+                                s.ExpiresAt == null ||
+                                s.ExpiresAt > now
+                            )
+                    );
+
+                if (
+                    !active ||
                     user?.EmailVerifiedAt is null ||
                     user.DeactivatedAt is not null ||
-                    suspended)
+                    suspended
+                )
                 {
                     context.Fail(
                         "Session is no longer active"
@@ -344,15 +462,17 @@ builder.Services.AddRateLimiter(options =>
 
     options.AddPolicy(
         "auth",
-        context => RateLimitPartition.GetFixedWindowLimiter(
-            context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-            _ => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = 30,
-                Window = TimeSpan.FromMinutes(1),
-                QueueLimit = 0
-            }
-        )
+        context =>
+            RateLimitPartition.GetFixedWindowLimiter(
+                context.Connection.RemoteIpAddress?
+                    .ToString() ?? "unknown",
+                _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 30,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0
+                }
+            )
     );
 });
 

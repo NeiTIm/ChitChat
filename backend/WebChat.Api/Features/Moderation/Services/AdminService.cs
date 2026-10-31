@@ -85,8 +85,16 @@ public sealed class AdminService(AppDbContext db, TimeProvider clock, IFileStora
                           select stored).SingleOrDefaultAsync(ct);
         if (file is null) return null;
         Stream content;
-        try { content = storage.OpenRead(file.StorageKey); }
-        catch (FileNotFoundException) { return null; }
+        try
+        {
+            content = await storage.OpenReadAsync(
+                file.StorageKey,
+                ct);
+        }
+        catch (FileNotFoundException)
+        {
+            return null;
+        }
         Audit(actor, "ReadReportEvidenceFile", "Report", reportId, evidenceId.ToString());
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
@@ -114,8 +122,14 @@ public sealed class AdminService(AppDbContext db, TimeProvider clock, IFileStora
     {
         if (!ValidReason(reason)) return false;
         if (!await IsAdminAsync(actor, ct) || actor == targetId || !await db.Users.AnyAsync(u => u.Id == targetId, ct)) return false;
-        db.Notifications.Add(new Notification { Id = Guid.NewGuid(), RecipientUserId = targetId, ActorUserId = actor,
-            Type = "AdminWarning", CreatedAt = Now });
+        db.Notifications.Add(new Notification
+        {
+            Id = Guid.NewGuid(),
+            RecipientUserId = targetId,
+            ActorUserId = actor,
+            Type = "AdminWarning",
+            CreatedAt = Now
+        });
         Audit(actor, "WarnUser", "User", targetId, reason.Trim());
         await db.SaveChangesAsync(ct);
         return true;
@@ -128,8 +142,15 @@ public sealed class AdminService(AppDbContext db, TimeProvider clock, IFileStora
         if (!await IsAdminAsync(actor, ct)) return false;
         var target = await db.Users.SingleOrDefaultAsync(u => u.Id == targetId && u.SystemRole != "Admin", ct);
         if (target is null || await db.AccountSuspensions.AnyAsync(s => s.UserId == targetId && s.Status == "Active" && s.RevokedAt == null, ct)) return false;
-        db.AccountSuspensions.Add(new AccountSuspension { Id = Guid.NewGuid(), UserId = targetId, AdminId = actor,
-            Reason = reason.Trim(), Status = "Active", StartedAt = Now });
+        db.AccountSuspensions.Add(new AccountSuspension
+        {
+            Id = Guid.NewGuid(),
+            UserId = targetId,
+            AdminId = actor,
+            Reason = reason.Trim(),
+            Status = "Active",
+            StartedAt = Now
+        });
         await db.UserSessions.Where(s => s.UserId == targetId && s.RevokedAt == null)
             .ExecuteUpdateAsync(update => update.SetProperty(s => s.RevokedAt, Now), ct);
         Audit(actor, "SuspendUser", "User", targetId, reason.Trim());
@@ -197,8 +218,16 @@ public sealed class AdminService(AppDbContext db, TimeProvider clock, IFileStora
         await IsAdminAsync(actor, ct) ? await db.AdminAuditLogs.OrderByDescending(a => a.CreatedAt).Take(100).ToListAsync(ct) : null;
 
     private void Audit(Guid actor, string action, string targetType, Guid? targetId, string? details) =>
-        db.AdminAuditLogs.Add(new AdminAuditLog { Id = Guid.NewGuid(), AdminUserId = actor, Action = action,
-            TargetType = targetType, TargetId = targetId, Details = details, CreatedAt = Now });
+        db.AdminAuditLogs.Add(new AdminAuditLog
+        {
+            Id = Guid.NewGuid(),
+            AdminUserId = actor,
+            Action = action,
+            TargetType = targetType,
+            TargetId = targetId,
+            Details = details,
+            CreatedAt = Now
+        });
     private static bool ValidReason(string? reason) => !string.IsNullOrWhiteSpace(reason) && reason.Length <= 1000;
     private static AdminReportDto Map(Report r) => new(r.Id, r.ReporterUserId, r.TargetType, r.TargetId, r.Reason,
         r.Status, r.CreatedAt, r.ReviewedByAdminId, r.ReviewedAt);

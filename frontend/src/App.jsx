@@ -664,9 +664,9 @@ function AppRoutes() {
         element={<AuthPage mode="register" />}
       />
       <Route
-        path="/verify-email"
-        element={<AuthPage mode="verify" />}
-      />
+  path="/verify-email"
+  element={<AuthPage mode="verify" />}
+/>
       <Route
         path="/login"
         element={<AuthPage mode="login" />}
@@ -675,10 +675,10 @@ function AppRoutes() {
         path="/forgot-password"
         element={<AuthPage mode="forgot" />}
       />
-      <Route
-        path="/reset-password"
-        element={<AuthPage mode="reset" />}
-      />
+     <Route
+  path="/reset-password"
+  element={<AuthPage mode="reset" />}
+/>
       <Route
         path="/reactivate"
         element={<AuthPage mode="reactivate" />}

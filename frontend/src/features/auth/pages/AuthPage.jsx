@@ -1,6 +1,10 @@
 
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import {
+  Link,
+  useNavigate,
+  useSearchParams,
+} from 'react-router-dom'
 import {
   ArrowLeft,
   ArrowRight,
@@ -9,7 +13,6 @@ import {
   Eye,
   EyeOff,
   KeyRound,
-  LoaderCircle,
   LockKeyhole,
   Mail,
   MessageCircle,
@@ -46,7 +49,7 @@ const pageConfig = {
   },
   verify: {
     title: 'Xác minh email',
-    description: 'Nhập token được gửi đến email để kích hoạt tài khoản.',
+    description: 'Xác minh email để kích hoạt tài khoản ChitChat.',
     button: 'Xác minh email',
     icon: Mail,
   },
@@ -182,15 +185,12 @@ function PasswordField({
 function AuthShowcase() {
   return (
     <aside className="relative hidden min-h-dvh flex-col overflow-hidden bg-[#19233d] p-10 text-white lg:flex xl:p-14">
-      {/* Background decorations */}
       <div className="pointer-events-none absolute -left-28 top-1/3 size-[420px] rounded-full bg-indigo-600/20 blur-[110px]" />
       <div className="pointer-events-none absolute -right-28 bottom-0 size-[440px] rounded-full bg-violet-500/20 blur-[110px]" />
 
       <div className="pointer-events-none absolute right-10 top-24 size-48 rounded-full border border-white/10" />
-
       <div className="pointer-events-none absolute -bottom-20 left-20 size-64 rounded-full border border-white/10" />
 
-      {/* Logo */}
       <Link
         to="/"
         className="relative z-10 flex w-fit items-center gap-3"
@@ -204,7 +204,6 @@ function AuthShowcase() {
         </span>
       </Link>
 
-      {/* Main content */}
       <div className="relative z-10 my-auto max-w-xl py-16">
         <div className="mb-7">
           <span className="inline-flex items-center gap-2 rounded-full border border-indigo-300/20 bg-white/10 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.16em] text-indigo-200 backdrop-blur-sm">
@@ -226,7 +225,6 @@ function AuthShowcase() {
           thân thiện và đầy cảm hứng.
         </p>
 
-        {/* Feature cards */}
         <div className="mt-10 grid grid-cols-2 gap-4">
           <div className="rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur-md transition-colors hover:bg-white/10">
             <div className="mb-5 flex size-11 items-center justify-center rounded-xl bg-indigo-400/15 text-indigo-300">
@@ -263,7 +261,6 @@ function AuthShowcase() {
         </div>
       </div>
 
-      {/* Footer */}
       <p className="relative z-10 text-xs text-slate-400">
         © ChitChat · Your space to connect
       </p>
@@ -277,6 +274,10 @@ function AuthShowcase() {
 
 export default function AuthPage({ mode = 'login' }) {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  // Ngăn gọi verify API hai lần trong React StrictMode.
+  const automaticVerifyStarted = useRef(false)
 
   const [form, setForm] = useState({
     email: '',
@@ -291,6 +292,8 @@ export default function AuthPage({ mode = 'login' }) {
     message: '',
   })
 
+  const [autoVerifying, setAutoVerifying] = useState(false)
+
   const config = pageConfig[mode] || pageConfig.login
   const PageIcon = config.icon
 
@@ -304,13 +307,90 @@ export default function AuthPage({ mode = 'login' }) {
   }
 
   // ====================================================
+  // TOKEN FROM EMAIL LINK
+  // ====================================================
+
+  useEffect(() => {
+    if (mode !== 'verify' && mode !== 'reset') {
+      return
+    }
+
+    const urlToken = searchParams.get('token')
+
+    if (!urlToken) {
+      return
+    }
+
+    // Không thực hiện xác minh tự động nhiều lần.
+    if (mode === 'verify' && automaticVerifyStarted.current) {
+      return
+    }
+
+    // Xóa token khỏi thanh địa chỉ, giữ các query param khác.
+    setSearchParams(previous => {
+      const next = new URLSearchParams(previous)
+      next.delete('token')
+      return next
+    }, { replace: true })
+
+    // Trang reset chỉ cần điền token.
+    // Người dùng vẫn phải nhập mật khẩu mới và nhấn nút.
+    if (mode === 'reset') {
+      setForm(previous => ({
+        ...previous,
+        token: urlToken,
+      }))
+      return
+    }
+
+    automaticVerifyStarted.current = true
+    setAutoVerifying(true)
+
+    setState({
+      loading: true,
+      error: '',
+      message: '',
+    })
+
+    const verifyAutomatically = async () => {
+      try {
+        await authApi.postAuthVerifyEmail({
+          token: urlToken,
+        })
+
+        setState({
+          loading: false,
+          error: '',
+          message:
+            'Email đã được xác minh thành công. Bạn có thể đăng nhập ChitChat.',
+        })
+      } catch (error) {
+        const code = error.response?.data?.code
+
+        setState({
+          loading: false,
+          error:
+            code === 'INVALID_TOKEN'
+              ? 'Liên kết xác minh không hợp lệ, đã hết hạn hoặc đã được sử dụng.'
+              : 'Không thể xác minh email. Vui lòng thử lại.',
+          message: '',
+        })
+      } finally {
+        setAutoVerifying(false)
+      }
+    }
+
+    void verifyAutomatically()
+  }, [mode, searchParams, setSearchParams])
+
+  // ====================================================
   // SUBMIT
   // ====================================================
 
   const submit = async event => {
     event.preventDefault()
 
-    if (state.loading) return
+    if (state.loading || autoVerifying) return
 
     setState({
       loading: true,
@@ -329,21 +409,21 @@ export default function AuthPage({ mode = 'login' }) {
         })
 
         message =
-          'Tài khoản đã tạo. Mở thư xác minh trong backend/WebChat.Api/private-uploads/dev-mail rồi nhập token.'
+          'Yêu cầu đăng ký đã được tiếp nhận. Hãy kiểm tra email để xác minh tài khoản trước khi đăng nhập.'
       } else if (mode === 'verify') {
         await authApi.postAuthVerifyEmail({
           token: form.token,
         })
 
         message =
-          'Email đã xác minh. Bạn có thể đăng nhập.'
+          'Email đã được xác minh thành công. Bạn có thể đăng nhập.'
       } else if (mode === 'forgot') {
         await authApi.postAuthForgotPassword({
           email: form.email,
         })
 
         message =
-          'Nếu tài khoản tồn tại, hướng dẫn đặt lại mật khẩu đã được chuẩn bị.'
+          'Nếu tài khoản tồn tại, hướng dẫn đặt lại mật khẩu sẽ được gửi đến email.'
       } else if (mode === 'reset') {
         await authApi.postAuthResetPassword({
           token: form.token,
@@ -384,7 +464,7 @@ export default function AuthPage({ mode = 'login' }) {
         code === 'INVALID_CREDENTIALS_OR_ACCOUNT_STATE'
           ? 'Thông tin đăng nhập không đúng hoặc tài khoản chưa thể đăng nhập.'
           : code === 'INVALID_TOKEN'
-            ? 'Token xác minh không hợp lệ hoặc đã hết hạn.'
+            ? 'Token không hợp lệ hoặc đã hết hạn.'
             : 'Yêu cầu thất bại. Vui lòng kiểm tra thông tin và thử lại.'
 
       setState({
@@ -403,9 +483,7 @@ export default function AuthPage({ mode = 'login' }) {
     <main className="grid min-h-dvh grid-cols-1 bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 lg:grid-cols-2">
       <AuthShowcase />
 
-      {/* RIGHT AUTH SECTION */}
       <section className="relative flex min-h-dvh flex-col px-5 py-6 sm:px-10 lg:px-14 xl:px-20">
-        {/* Topbar */}
         <div className="flex items-center justify-between gap-4">
           <Link
             to="/"
@@ -418,9 +496,7 @@ export default function AuthPage({ mode = 'login' }) {
           <ThemeToggle compact />
         </div>
 
-        {/* Main form container */}
         <div className="mx-auto flex w-full max-w-[440px] flex-1 flex-col justify-center py-12">
-          {/* Mobile logo */}
           <Link
             to="/"
             className="mb-9 flex items-center gap-3 lg:hidden"
@@ -434,7 +510,6 @@ export default function AuthPage({ mode = 'login' }) {
             </span>
           </Link>
 
-          {/* Heading */}
           <div className="mb-8">
             <div className="mb-6 flex size-14 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-400">
               <PageIcon size={27} strokeWidth={1.8} />
@@ -457,156 +532,178 @@ export default function AuthPage({ mode = 'login' }) {
             </p>
           </div>
 
-          {/* FORM */}
-          <form
-            onSubmit={submit}
-            className="space-y-5"
-          >
-            {/* Token */}
-            {(mode === 'verify' || mode === 'reset') ? (
-              <FormField
-                id="auth-token"
-                label={
-                  mode === 'verify'
-                    ? 'Token xác minh'
-                    : 'Token đặt lại mật khẩu'
-                }
-                icon={KeyRound}
-                value={form.token}
-                onChange={update('token')}
-                placeholder="Nhập token của bạn"
-                autoComplete="off"
+          {autoVerifying && (
+            <div
+              role="status"
+              aria-live="polite"
+              className="mb-6 flex items-center gap-3 rounded-xl border border-indigo-200 bg-indigo-50 p-4 text-sm text-indigo-700 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-300"
+            >
+              <Mail
+                size={19}
+                className="shrink-0"
               />
-            ) : (
-              <>
-                {/* Email / Username */}
-                <FormField
-                  id="auth-identifier"
-                  label={
-                    mode === 'login' || mode === 'reactivate'
-                      ? 'Email hoặc tên đăng nhập'
-                      : 'Địa chỉ email'
-                  }
-                  type={
-                    mode === 'login' || mode === 'reactivate'
-                      ? 'text'
-                      : 'email'
-                  }
-                  icon={Mail}
-                  value={form.email}
-                  onChange={update('email')}
-                  placeholder={
-                    mode === 'login' || mode === 'reactivate'
-                      ? 'Nhập email hoặc username'
-                      : 'name@example.com'
-                  }
-                  autoComplete="username"
-                />
 
-                {/* Username registration */}
-                {mode === 'register' && (
+              <span>
+                Đang xác minh email của bạn...
+              </span>
+            </div>
+          )}
+
+          {state.error && (
+            <div
+              role="alert"
+              className="mb-6 flex items-start gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm leading-6 text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-400"
+            >
+              <CircleAlert
+                size={19}
+                className="mt-0.5 shrink-0"
+              />
+
+              <span>{state.error}</span>
+            </div>
+          )}
+
+          {state.message && (
+            <div
+              role="status"
+              aria-live="polite"
+              className="mb-6 flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm leading-6 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400"
+            >
+              <CheckCircle2
+                size={19}
+                className="mt-0.5 shrink-0"
+              />
+
+              <span>{state.message}</span>
+            </div>
+          )}
+
+          {mode === 'verify' && state.message && (
+            <Link
+              to="/login"
+              className="mb-6 flex h-12 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white transition hover:bg-indigo-700"
+            >
+              Đăng nhập ngay
+              <ArrowRight size={18} />
+            </Link>
+          )}
+
+          {!(
+            mode === 'verify' &&
+            (autoVerifying || Boolean(state.message))
+          ) && (
+            <form
+              onSubmit={submit}
+              className="space-y-5"
+            >
+              {(mode === 'verify' || mode === 'reset') ? (
+                <FormField
+                  id="auth-token"
+                  label={
+                    mode === 'verify'
+                      ? 'Token xác minh'
+                      : 'Token đặt lại mật khẩu'
+                  }
+                  icon={KeyRound}
+                  value={form.token}
+                  onChange={update('token')}
+                  placeholder="Nhập token của bạn"
+                  autoComplete="off"
+                />
+              ) : (
+                <>
                   <FormField
-                    id="auth-username"
-                    label="Tên đăng nhập"
-                    icon={UserRound}
-                    value={form.username}
-                    onChange={update('username')}
-                    placeholder="Nhập username"
-                    minLength={3}
-                    maxLength={50}
+                    id="auth-identifier"
+                    label={
+                      mode === 'login' || mode === 'reactivate'
+                        ? 'Email hoặc tên đăng nhập'
+                        : 'Địa chỉ email'
+                    }
+                    type={
+                      mode === 'login' || mode === 'reactivate'
+                        ? 'text'
+                        : 'email'
+                    }
+                    icon={Mail}
+                    value={form.email}
+                    onChange={update('email')}
+                    placeholder={
+                      mode === 'login' || mode === 'reactivate'
+                        ? 'Nhập email hoặc username'
+                        : 'name@example.com'
+                    }
                     autoComplete="username"
                   />
-                )}
-              </>
-            )}
 
-            {/* Password */}
-            {mode !== 'verify' && mode !== 'forgot' && (
-              <PasswordField
-                id="auth-password"
-                label={
-                  mode === 'reset'
-                    ? 'Mật khẩu mới'
-                    : 'Mật khẩu'
-                }
-                value={form.password}
-                onChange={update('password')}
-                minLength={
-                  mode === 'register' || mode === 'reset'
-                    ? 12
-                    : undefined
-                }
-                autoComplete={
-                  mode === 'register' || mode === 'reset'
-                    ? 'new-password'
-                    : 'current-password'
-                }
-              />
-            )}
-
-            {/* Forgot password */}
-            {mode === 'login' && (
-              <div className="flex justify-end">
-                <Link
-                  to="/forgot-password"
-                  className="text-xs font-semibold text-indigo-600 transition hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
-                >
-                  Quên mật khẩu?
-                </Link>
-              </div>
-            )}
-
-            {/* Error */}
-            {state.error && (
-              <div
-                role="alert"
-                className="flex items-start gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm leading-6 text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-400"
-              >
-                <CircleAlert
-                  size={19}
-                  className="mt-0.5 shrink-0"
-                />
-
-                <span>{state.error}</span>
-              </div>
-            )}
-
-            {/* Success */}
-            {state.message && (
-              <div
-                role="status"
-                aria-live="polite"
-                className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm leading-6 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400"
-              >
-                <CheckCircle2
-                  size={19}
-                  className="mt-0.5 shrink-0"
-                />
-
-                <span>{state.message}</span>
-              </div>
-            )}
-
-            {/* Submit */}
-            <Button
-              type="submit"
-              loading={state.loading}
-              disabled={state.loading}
-              fullWidth
-              size="lg"
-              className="mt-2 h-12 rounded-xl"
-            >
-              {state.loading
-                ? 'Đang xử lý...'
-                : config.button}
-
-              {!state.loading && (
-                <ArrowRight size={18} />
+                  {mode === 'register' && (
+                    <FormField
+                      id="auth-username"
+                      label="Tên đăng nhập"
+                      icon={UserRound}
+                      value={form.username}
+                      onChange={update('username')}
+                      placeholder="Nhập username"
+                      minLength={3}
+                      maxLength={50}
+                      autoComplete="username"
+                    />
+                  )}
+                </>
               )}
-            </Button>
-          </form>
 
-          {/* MAIN AUTH NAVIGATION */}
+              {mode !== 'verify' && mode !== 'forgot' && (
+                <PasswordField
+                  id="auth-password"
+                  label={
+                    mode === 'reset'
+                      ? 'Mật khẩu mới'
+                      : 'Mật khẩu'
+                  }
+                  value={form.password}
+                  onChange={update('password')}
+                  minLength={
+                    mode === 'register' || mode === 'reset'
+                      ? 12
+                      : undefined
+                  }
+                  autoComplete={
+                    mode === 'register' || mode === 'reset'
+                      ? 'new-password'
+                      : 'current-password'
+                  }
+                />
+              )}
+
+              {mode === 'login' && (
+                <div className="flex justify-end">
+                  <Link
+                    to="/forgot-password"
+                    className="text-xs font-semibold text-indigo-600 transition hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+                  >
+                    Quên mật khẩu?
+                  </Link>
+                </div>
+              )}
+
+              <Button
+                type="submit"
+                loading={state.loading}
+                disabled={state.loading}
+                fullWidth
+                size="lg"
+                className="mt-2 h-12 rounded-xl"
+              >
+                {state.loading
+                  ? 'Đang xử lý...'
+                  : config.button}
+
+                {!state.loading && (
+                  <ArrowRight size={18} />
+                )}
+              </Button>
+            </form>
+          )}
+
           <div className="mt-8 border-t border-slate-200 pt-6 dark:border-slate-800">
             {mode === 'login' ? (
               <p className="text-center text-sm text-slate-500 dark:text-slate-400">
@@ -639,7 +736,6 @@ export default function AuthPage({ mode = 'login' }) {
             )}
           </div>
 
-          {/* SECONDARY LINKS */}
           <div className="mt-7 flex flex-wrap justify-center gap-x-5 gap-y-3 text-xs font-medium text-slate-400 dark:text-slate-500">
             {mode !== 'verify' && (
               <Link
@@ -670,7 +766,6 @@ export default function AuthPage({ mode = 'login' }) {
           </div>
         </div>
 
-        {/* Footer */}
         <footer className="flex items-center justify-center gap-2 py-3 text-center text-xs text-slate-400 dark:text-slate-500">
           <ShieldCheck size={15} />
           ChitChat · Bảo vệ kết nối của bạn
